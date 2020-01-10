@@ -1,0 +1,69 @@
+﻿<Window x:Class="sourcegen.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:sourcegen"
+        mc:Ignorable="d"
+        Title="Sourcegen" Height="530.442" Width="497.618" Closed="Window_Closed" Icon="logo_sm.png">
+    <Grid Margin="0,0,2,3">
+        <Grid.RowDefinitions>
+            <RowDefinition/>
+        </Grid.RowDefinitions>
+        <Menu HorizontalAlignment="Left" Height="23" VerticalAlignment="Top" Width="478">
+            <MenuItem Header="_File">
+                <MenuItem Header="_Defaults" >
+                    <MenuItem Header="_Monogame Toolkit" Click="_Configure_MonogameToolkit" />
+                    <MenuItem Header="_Shake Engine"  Click="_Configure_Shake" />
+                </MenuItem>
+                <Separator />
+                <MenuItem Header="_About" Click="About_MenuItem_Click" />
+                <Separator />
+                <MenuItem Header="_Exit" Click="MenuItem_Click" />
+            </MenuItem>
+        </Menu>
+
+
+        <ComboBox x:Name="_cboFileType" HorizontalAlignment="Left" Margin="103,59,0,0" VerticalAlignment="Top" Width="120" SelectionChanged="_cboFileType_SelectionChanged" Height="22">
+        </ComboBox>
+        <Label Content="Filetype(s)" HorizontalAlignment="Left" Margin="35,59,0,0" VerticalAlignment="Top" RenderTransformOrigin="0.584,2.078" Height="26" Width="63"/>
+
+        <TextBox x:Name="_txtFilename" HorizontalAlignment="Left" Height="26" Margin="103,28,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="283" Text="Source"/>
+        <Label Content="File/Class Name" HorizontalAlignment="Left" Margin="4,28,0,0" VerticalAlignment="Top" RenderTransformOrigin="0.584,2.078" Height="26" Width="94"/>
+        <Expander x:Name="_grpOptions" Header="Options" Margin="10,90,10,0" Collapsed="_grpOptions_Expanded" Expanded="_grpOptions_Expanded" Height="342" VerticalAlignment="Top">
+            <Grid x:Name="_gridOptions" Height="313" Width="468" Margin="0,0,-2,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition/>
+                </Grid.ColumnDefinitions>
+                <Label Content="License" HorizontalAlignment="Left" Margin="28,11,0,0" VerticalAlignment="Top"/>
+                <TextBox x:Name="_txtAuthor" HorizontalAlignment="Left" Height="26" Margin="98,77,0,0" TextWrapping="Wrap" Text="My Name" VerticalAlignment="Top" Width="263"/>
+                <CheckBox x:Name="_chkAuthor" Content="" HorizontalAlignment="Left" Margin="78,77,0,0" VerticalAlignment="Top" Checked="_chkAuthor_Checked" Unchecked="_chkAuthor_Checked"/>
+                <Label Content="Author" HorizontalAlignment="Left" Margin="30,73,0,0" VerticalAlignment="Top" RenderTransformOrigin="0.508,0.533"/>
+                <CheckBox x:Name="_chkDateTime" Content="Date / Time" HorizontalAlignment="Left" Margin="7,114,0,0" VerticalAlignment="Top" FlowDirection="RightToLeft" IsChecked="True" Width="90"/>
+
+                <TextBox x:Name="_txtLicense" HorizontalAlignment="Left" Height="57" Margin="98,15,0,0" TextWrapping="Wrap" Text="My License" VerticalAlignment="Top" Width="263"/>
+                <CheckBox x:Name="_chkLicense" Content="" HorizontalAlignment="Left" Margin="78,15,0,0" VerticalAlignment="Top" Checked="_chkLicense_Checked"  Unchecked="_chkLicense_Checked"/>
+                <TextBox x:Name="_txtCopyright" HorizontalAlignment="Left" Height="26" Margin="98,144,0,0" TextWrapping="Wrap" Text="My Company" VerticalAlignment="Top" Width="263"/>
+                <CheckBox x:Name="_chkCopyright" Content="" HorizontalAlignment="Left" Margin="78,144,0,0" VerticalAlignment="Top" Checked="_chkCopyright_Checked" Unchecked="_chkCopyright_Checked"/>
+                <Label Content="Copyright" HorizontalAlignment="Left" Margin="10,144,0,0" VerticalAlignment="Top" RenderTransformOrigin="0.508,0.533"/>
+                <TextBox x:Name="_txtSpaces" HorizontalAlignment="Left" Height="26" Margin="103,271,0,0" TextWrapping="Wrap" Text="2" 
+                         VerticalAlignment="Top" Width="23" PreviewTextInput="_txtSpaces_PreviewTextInput"/>
+                <Label Content="Spaces" HorizontalAlignment="Left" Margin="52,271,0,0" VerticalAlignment="Top" RenderTransformOrigin="0.508,0.533"/>
+                <TextBox x:Name="_txtNamespace" HorizontalAlignment="Left" Height="26" Margin="98,175,0,0" TextWrapping="Wrap" Text="MyNamespace" VerticalAlignment="Top" Width="263"/>
+                <CheckBox x:Name="_chkNamespace" Content="" HorizontalAlignment="Left" Margin="78,175,0,0" VerticalAlignment="Top" Checked="_chkNamespace_Checked" Unchecked="_chkNamespace_Checked"/>
+                <Label x:Name="_lblNamespace" Content="Namespace" HorizontalAlignment="Left" Margin="10,175,0,0" VerticalAlignment="Top" RenderTransformOrigin="0.508,0.533"/>
+                <TextBox x:Name="_txtBaseClass" HorizontalAlignment="Left" Height="26" Margin="98,206,0,0" TextWrapping="Wrap" Text="GameMemory" VerticalAlignment="Top" Width="160"/>
+                <CheckBox x:Name="_chkBaseClass" Content="" HorizontalAlignment="Left" Margin="78,206,0,0" VerticalAlignment="Top" IsChecked="True"  Checked="_chkBaseClass_Copy_Checked"  Unchecked="_chkBaseClass_Copy_Checked"/>
+                <Label Content="Base Class" HorizontalAlignment="Left" Margin="10,206,0,0" VerticalAlignment="Top" RenderTransformOrigin="0.508,0.533"/>
+                <TextBox x:Name="_txtPackage" HorizontalAlignment="Left" Height="26" Margin="98,237,0,0" TextWrapping="Wrap" Text="My.Package" VerticalAlignment="Top" Width="160"/>
+                <CheckBox x:Name="_chkPackage" Content="" HorizontalAlignment="Left" Margin="78,237,0,0" VerticalAlignment="Top" Checked="_chkPackage_Checked" Unchecked="_chkPackage_Checked"/>
+                <Label x:Name="_lblPackage" Content="Package" HorizontalAlignment="Left" Margin="19,237,0,0" VerticalAlignment="Top" RenderTransformOrigin="0.508,0.533"/>
+                <Button x:Name="_btnDefaultLicense" Content="Default" HorizontalAlignment="Left" Margin="376,25,0,0" VerticalAlignment="Top" Width="75" Click="_btnDefaultLicense_Click"/>
+            </Grid>
+        </Expander>
+        <Button x:Name="_btnClear" Content="Clear" HorizontalAlignment="Left" Margin="311,65,0,0" VerticalAlignment="Top" Width="75" Click="_btnClear_Click" Height="20"/>
+        <Button x:Name="_btnGenerate" Content="Generate" HorizontalAlignment="Left"
+                Margin="185,0,0,10" VerticalAlignment="Bottom" Width="122" Height="46" Click="_btnGenerate_Click"/>
+
+    </Grid>
+</Window>

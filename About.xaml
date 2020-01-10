@@ -1,0 +1,14 @@
+﻿<Window x:Class="sourcegen.About"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:sourcegen"
+        mc:Ignorable="d"
+        Title="About" Height="306.777" Width="326.899" Icon="logo_sm.png">
+    <Grid RenderTransformOrigin="0.515,0.591">
+        <TextBox x:Name="_txtInfo" Margin="24,10,16,0" TextWrapping="Wrap" Height="71" VerticalAlignment="Top" TextChanged="TextBox_TextChanged"/>
+        <Button x:Name="_btnOk" Content="Ok" Margin="113,237,110,11" Click="_btnOk_Click"/>
+        <TextBox x:Name="_txtLog" Margin="24,98,16,58" TextWrapping="Wrap" Text="Error Log, Errors appear here." VerticalScrollBarVisibility="Visible"/>
+    </Grid>
+</Window>
