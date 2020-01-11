@@ -26,13 +26,18 @@ namespace sourcegen
                 "Sourcegen\n" +
                 "C++/Java Class Generator\n" +
                 "Created By: Github / Metalmario971\n" +
-                "Jan 2020\n"
+                "Jan 2020\n" +
+                "\n" +
+                "Usage: Fill out the Source box, and select a language.  " +
+                "Options will appear letting you customize the source header. " +
+                " You can save this configuration for future sources with File->Save. " +
+                " Pressing Enter at any time will click the generate button (a little faster)."
                 ;
         }
 
         private void _btnOk_Click(object sender, RoutedEventArgs e)
         {
-            Close();
+            Hide();
         }
         public void SetLog(string l)
         {

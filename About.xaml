@@ -5,10 +5,10 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:sourcegen"
         mc:Ignorable="d"
-        Title="About" Height="306.777" Width="326.899" Icon="logo_sm.png">
+        Title="About" Height="328.409" Width="448.168" Icon="logo_sm.png">
     <Grid RenderTransformOrigin="0.515,0.591">
-        <TextBox x:Name="_txtInfo" Margin="24,10,16,0" TextWrapping="Wrap" Height="71" VerticalAlignment="Top" TextChanged="TextBox_TextChanged"/>
-        <Button x:Name="_btnOk" Content="Ok" Margin="113,237,110,11" Click="_btnOk_Click"/>
-        <TextBox x:Name="_txtLog" Margin="24,98,16,58" TextWrapping="Wrap" Text="Error Log, Errors appear here." VerticalScrollBarVisibility="Visible"/>
+        <TextBox x:Name="_txtInfo" Margin="10,10,10,0" TextWrapping="Wrap" Height="201" VerticalAlignment="Top" TextChanged="TextBox_TextChanged" BorderThickness="0"/>
+        <Button x:Name="_btnOk" Content="Ok" Margin="183,258,174,10" Click="_btnOk_Click"/>
+        <TextBox x:Name="_txtLog" Margin="10,216,10,45" TextWrapping="Wrap" Text="Error Log, Errors appear here." VerticalScrollBarVisibility="Visible"/>
     </Grid>
 </Window>
