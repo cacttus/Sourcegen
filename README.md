@@ -1,4 +1,4 @@
-![Sourcegen Screenshot](https://github.com/metalmario971/Sourcegen/blob/master/sg_screenshot.png)
+
 
 # Sourcegen
 WPF source generating application for projects.
@@ -13,5 +13,7 @@ Configurable with:
 * copyright, 
 * license, 
 * cryptic ifguard
+
+![Sourcegen Screenshot](https://github.com/metalmario971/Sourcegen/blob/master/sg_screenshot.png)
 
 Automatic BSD license included.
