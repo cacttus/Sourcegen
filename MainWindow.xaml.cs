@@ -18,7 +18,9 @@ using System.Windows.Shapes;
 
 namespace sourcegen
 {
-
+    /// <summary>
+    /// Custom attribute storing a list of possible extensions for a filetype.  Includes utility methods to convert to/from filetype.
+    /// </summary>
     public class ExtensionList : Attribute
     {
         public string _atts = null;
@@ -26,22 +28,78 @@ namespace sourcegen
         {
             this._atts = atts;
         }
-
-        public static string Get(Type tp, string name)
+        /// <summary>
+        /// Returns a list of filetypes that contain the given extension.  Extension starts with a '.'.
+        /// </summary>
+        /// <param name="extension"></param>
+        /// <returns></returns>
+        public static List<Filetype> GetPossibleExtensionMappings(string extension)
         {
-            MemberInfo[] mi = tp.GetMember(name);
-            if (mi != null && mi.Length > 0)
+            List<Filetype> ft = new List<Filetype>();
+            MemberInfo[] fis = typeof(Filetype).GetFields();
+
+            foreach (var fi in fis)
             {
-                ExtensionList attr = Attribute.GetCustomAttribute(mi[0],
-                    typeof(ExtensionList)) as ExtensionList;
-                if (attr != null)
+                ExtensionList[] extlists = (ExtensionList[])fi.GetCustomAttributes(typeof(ExtensionList), false);
+                foreach (ExtensionList extlist in extlists)
                 {
-                    return attr._atts;
+                    foreach (string ext in ExtensionList.AttsToList(extlist._atts))
+                    {
+                        if (ext.Trim().ToLower().Equals(extension.Trim().ToLower()))
+                        {
+                            ft.Add((Filetype)Enum.Parse(typeof(Filetype), fi.Name));
+                        }
+                    }
                 }
             }
-            return null;
+            return ft;
         }
-        public static string Get(object enm)
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="extension"></param>
+        /// <param name="unique_only">Set to true to only return a 1-1 mapping of type to extension.  
+        /// For instance C++ Class type is {h,cpp} however C++ source is {cpp}, setting this would return the C++ source.  Otherwise, we return the first filetype that contains the extension.</param>
+        /// <returns></returns>
+        public static Filetype ExtensionToFiletype(string extension, bool unique_only)
+        {
+            List<Filetype> fts = GetPossibleExtensionMappings(extension);
+            foreach (Filetype ft in fts)
+            {
+                List<string> exts = ExtensionList.Get(ft);
+                if (unique_only)
+                {
+                    if (exts.Count == 1)
+                    {
+                        return ft;
+                    }
+                }
+                else
+                {
+                    return ft;
+                }
+            }
+            return Filetype.None;
+        }
+        public static List<string> AttsToList(string atts)
+        {
+            List<string> ret = new List<string>() { ".error" };
+            if (atts != null)
+            {
+                ret = atts.Split(',').ToList();
+
+                //Clear empty extensions.
+                for (int i = ret.Count - 1; i >= 0; i--)
+                {
+                    if (ret[i].Trim().Length == 0)
+                    {
+                        ret.RemoveAt(i);
+                    }
+                }
+            }
+            return ret;
+        }
+        public static List<string> Get(object enm)
         {
             if (enm != null)
             {
@@ -52,7 +110,8 @@ namespace sourcegen
                         typeof(ExtensionList)) as ExtensionList;
                     if (attr != null)
                     {
-                        return attr._atts;
+                        return ExtensionList.AttsToList(attr._atts);
+
                     }
                 }
             }
@@ -62,6 +121,9 @@ namespace sourcegen
 
     public enum Filetype
     {
+        [Description("None")]
+        [ExtensionList("")]
+        None,
         [Description("Java")]
         [ExtensionList(".java")]
         Java,
@@ -74,16 +136,16 @@ namespace sourcegen
         [Description("C++ Source")]
         [ExtensionList(".cpp")]
         CPP_Source,
-        [Description("None")]
-        None
     }
 
     public partial class MainWindow : Window
     {
-        List<TextBox> _dataControls;
+        private List<TextBox> _dataControls;
         private double _optionsHeight = 0;
         private KeyboardHook _hook = null; //Literally, one of the best gems in a while.
-        bool _bEditedNamespace = false;
+        private bool _bEditedNamespace = false;
+        private Filetype _eUserInputType = Filetype.None;
+        private static string DefaultSettingsFileName = "DefaultSettings.json";
 
         public MainWindow()
         {
@@ -99,9 +161,10 @@ namespace sourcegen
         }
 
         #region Public: Methods
+
         public void SetStatus(string x)
         {
-            (_statusBar.Items[0] as ListBoxItem).Content = x;
+            _lblStatus.Content = x;
         }
         #endregion
 
@@ -109,6 +172,10 @@ namespace sourcegen
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
             NewConfig();
+            LoadDefaultSettings();
+            _txtFilename.Text = "";
+            Keyboard.Focus(_txtFilename);
+            UpdateFilenameHighlight();
         }
         private void _grpOptions_Expanded1(object sender, RoutedEventArgs e)
         {
@@ -133,6 +200,8 @@ namespace sourcegen
         private void _txtFilename_TextChanged(object sender, TextChangedEventArgs e)
         {
             UpdateFilenamePreview();
+            UserInputFiletype();
+            UpdateFilenameHighlight();
         }
         private void _cboFileType_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
@@ -156,6 +225,8 @@ namespace sourcegen
                 _grpOptions.IsEnabled = true;
             }
             _grpOptions.IsEnabled = (ft != Filetype.None);
+
+            _btnGenerate.IsEnabled = _grpOptions.IsEnabled;
 
             UpdateFilenamePreview();
         }
@@ -205,7 +276,6 @@ namespace sourcegen
 
             _txtSpaces.Text = "2";
         }
-
         private void _chkLicense_Checked(object sender, RoutedEventArgs e)
         {
             DisableHide(_txtLicense, _chkLicense);
@@ -266,17 +336,102 @@ namespace sourcegen
             //This is a little gimmick to show the preview.
             _bEditedNamespace = true;
         }
-
+        private void _chkGenerateDoc_Checked(object sender, RoutedEventArgs e)
+        {
+            bool b = (_chkGenerateDoc.IsChecked == true);
+            _chkAuthor.IsChecked = _chkAuthor.IsEnabled = b;
+            _chkCopyright.IsChecked = _chkCopyright.IsEnabled = b;
+            _chkLicense.IsChecked = _chkLicense.IsEnabled = b;
+            _chkDateTime.IsChecked = _chkDateTime.IsEnabled = b;
+            //_chk.IsEnabled = _chkAuthor.IsChecked = (_chkGenerateDoc.IsChecked == true);
+        }
+        private void _chkPromptToSave_Checked(object sender, RoutedEventArgs e)
+        {
+            _txtDefaultDirectory.IsEnabled = (_chkPromptToSave.IsChecked == false);
+            UpdateFilenamePreview();
+        }
+        private void _chkDefaultSettings_Click(object sender, RoutedEventArgs e)
+        {
+            if (_chkDefaultSettings.IsChecked == true)
+            {
+                SetDefaultSettings();
+            }
+            else
+            {
+                ClearDefaultSettings();
+            }
+        }
         #endregion
 
         #region Private:Methods
+        private static string GetSettingsFilePath()
+        {
+            string ad = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            string path = System.IO.Path.Combine(ad, "Sourcegen");
+            path = System.IO.Path.Combine(path, DefaultSettingsFileName);
+            return path;
+        }
+        private void LoadDefaultSettings()
+        {
+            try
+            {
+                string st = GetSettingsFilePath();
+                if (System.IO.File.Exists(st))
+                {
+                    LoadConfigFromFile(st);
+                    _chkDefaultSettings.IsChecked = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                Globals.LogError(ex.ToString());
+                _chkDefaultSettings.IsChecked = false;
+            }
+        }
+        private void SetDefaultSettings()
+        {
+            try
+            {
+                string st = GetSettingsFilePath();
+                SaveConfigToFile(st);
+                _chkDefaultSettings.IsChecked = true;
+            }
+            catch (Exception ex)
+            {
+                Globals.LogError(ex.ToString());
+            }
+        }
+        private void ClearDefaultSettings()
+        {
+            try
+            {
+                string st = GetSettingsFilePath();
+                if (System.IO.File.Exists(st))
+                {
+                    MessageBoxResult mr = MessageBox.Show("You are about to delete '" + st + "', continue?", "Warning", MessageBoxButton.OKCancel, MessageBoxImage.Exclamation);
+                    if (mr == MessageBoxResult.OK)
+                    {
+                        System.IO.File.Delete(st);
+                        SetStatus("Deleted " + st);
+                        _chkDefaultSettings.IsChecked = false;
+                    }
+                    else
+                    {
+                        _chkDefaultSettings.IsChecked = true;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Globals.LogError(ex.ToString());
+            }
+        }
         private void OnHookKeyDown(object sender, HookEventArgs e)
         {
             UInt32 key = e.key;
             if (key == 13)
             {
                 Generate();
-                Close();
             }
         }
         private void NewConfig()
@@ -325,37 +480,43 @@ namespace sourcegen
                 dlg.Filter = "Text documents (" + ext + ")|*" + ext;
                 bool continueSave = (dlg.ShowDialog() == true);
 
-                Settings set = new Settings();
-                set.Filetype = GetSelectedFiletype();
-
-                set._bComments = _chkGenerateDoc.IsChecked == true;
-                set._bLicense = _chkLicense.IsChecked == true;
-                set._strLicense = _txtLicense.Text;
-                set._bAuthor = _chkAuthor.IsChecked == true;
-                set._strAuthor = _txtAuthor.Text;
-                set._bCopyright = _chkCopyright.IsChecked == true;
-                set._strCopyright = _txtCopyright.Text;
-                set._bDate = _chkDateTime.IsChecked == true;
-
-                set._bBaseClass = _chkBaseClass.IsChecked == true;
-                set._strBaseClass = _txtBaseClass.Text;
-                set._bNamespace = _chkNamespace.IsChecked == true;
-                set._strNamespace = _txtNamespace.Text;
-                set._bTabs = _chkUseTabs.IsChecked == true;
-                set._iIndent = GetIndentSize();
-
-                set._bCloseAfterGenerating = _chkCloseAfterGenerate.IsChecked == true;
-                set._bPromptSave = _chkPromptToSave.IsChecked == true;
-
-                if (continueSave == true)
+                if (continueSave)
                 {
-                    set.SaveAs(dlg.FileName);
+                    SaveConfigToFile(dlg.FileName);
                 }
             }
             catch (Exception ex)
             {
                 Globals.LogError("Exception Saving: " + ex.ToString());
             }
+        }
+        private void SaveConfigToFile(string fullPath)
+        {
+            Settings set = new Settings();
+            set.Filetype = GetSelectedFiletype();
+
+            set._bComments = _chkGenerateDoc.IsChecked == true;
+            set._bLicense = _chkLicense.IsChecked == true;
+            set._strLicense = _txtLicense.Text;
+            set._bAuthor = _chkAuthor.IsChecked == true;
+            set._strAuthor = _txtAuthor.Text;
+            set._bCopyright = _chkCopyright.IsChecked == true;
+            set._strCopyright = _txtCopyright.Text;
+            set._bDate = _chkDateTime.IsChecked == true;
+
+            set._bBaseClass = _chkBaseClass.IsChecked == true;
+            set._strBaseClass = _txtBaseClass.Text;
+            set._bNamespace = _chkNamespace.IsChecked == true;
+            set._strNamespace = _txtNamespace.Text;
+            set._bTabs = _chkUseTabs.IsChecked == true;
+            set._iIndent = GetIndentSize();
+
+            set._bCloseAfterGenerating = _chkCloseAfterGenerate.IsChecked == true;
+            set._bPromptSave = _chkPromptToSave.IsChecked == true;
+
+            set._strDefaultSaveLocation = _txtDefaultDirectory.Text;
+
+            set.SaveAs(fullPath, true);
         }
         private void LoadConfig()
         {
@@ -372,40 +533,48 @@ namespace sourcegen
 
                 if (continueLoad)
                 {
-                    Settings setc = new Settings();
-                    Settings set = setc.Load(dlg.FileName) as Settings;
-
-                    if (set != null)
-                    {
-                        SelectFileType(set.Filetype);
-                        _chkGenerateDoc.IsChecked = set._bComments;
-                        _chkLicense.IsChecked = set._bLicense;
-                        _txtLicense.Text = set._strLicense;
-                        _chkAuthor.IsChecked = set._bAuthor;
-                        _txtAuthor.Text = set._strAuthor;
-                        _chkCopyright.IsChecked = set._bCopyright;
-                        _txtCopyright.Text = set._strCopyright;
-                        _chkDateTime.IsChecked = set._bDate;
-
-                        _chkBaseClass.IsChecked = set._bBaseClass;
-                        _txtBaseClass.Text = set._strBaseClass;
-                        _chkNamespace.IsChecked = set._bNamespace;
-                        _txtNamespace.Text = set._strNamespace;
-                        _chkUseTabs.IsChecked = set._bTabs;
-                        _txtSpaces.Text = set._iIndent.ToString();
-
-                        _chkCloseAfterGenerate.IsChecked = set._bCloseAfterGenerating;
-                        _chkPromptToSave.IsChecked = set._bPromptSave;
-                    }
-                    else
-                    {
-                        Globals.LogError("Failed to load, could not cast the JSON to a Settings class.");
-                    }
+                    LoadConfigFromFile(dlg.FileName);
                 }
             }
             catch (Exception ex)
             {
                 Globals.LogError("Exception Loading: " + ex.ToString());
+            }
+        }
+        private void LoadConfigFromFile(string file)
+        {
+            Settings setc = new Settings();
+            Settings set = setc.Load(file) as Settings;
+
+            if (set != null)
+            {
+                SelectFileType(set.Filetype);
+                _chkGenerateDoc.IsChecked = set._bComments;
+                _chkLicense.IsChecked = set._bLicense;
+                _txtLicense.Text = set._strLicense;
+                _chkAuthor.IsChecked = set._bAuthor;
+                _txtAuthor.Text = set._strAuthor;
+                _chkCopyright.IsChecked = set._bCopyright;
+                _txtCopyright.Text = set._strCopyright;
+                _chkDateTime.IsChecked = set._bDate;
+
+                _chkBaseClass.IsChecked = set._bBaseClass;
+                _txtBaseClass.Text = set._strBaseClass;
+                _chkNamespace.IsChecked = set._bNamespace;
+                _txtNamespace.Text = set._strNamespace;
+                _chkUseTabs.IsChecked = set._bTabs;
+                _txtSpaces.Text = set._iIndent.ToString();
+
+                _chkCloseAfterGenerate.IsChecked = set._bCloseAfterGenerating;
+                _chkPromptToSave.IsChecked = set._bPromptSave;
+
+                _txtDefaultDirectory.Text = set._strDefaultSaveLocation;
+
+                _bEditedNamespace = true;   //Prevent default namespace from beging replaced
+            }
+            else
+            {
+                throw new Exception("Failed to load, could not cast the JSON to a Settings class.");
             }
         }
         private double GetToggleHeight()
@@ -522,7 +691,7 @@ namespace sourcegen
             head += "\n";
             if (_chkNamespace.IsChecked == true)
             {
-                head += "namespace " + _txtNamespace.Text + " {\n";
+                head += "namespace " + GetNamespace() + " {\n";
             }
             //Class doc
             if (_chkGenerateDoc.IsChecked == true)
@@ -551,14 +720,14 @@ namespace sourcegen
             head += "\n";
             if (_chkNamespace.IsChecked == true)
             {
-                head += "}//ns " + _txtNamespace.Text + "\n";
+                head += "}//ns " + GetNamespace() + "\n";
             }
             head += "\n";
             head += "#endif\n";
 
             return head;
         }
-        string GetCPPSource()
+        private string GetCPPSource()
         {
             string head = "";
             head += "#include \"./" + GetFileName() + ".h\"\n";
@@ -566,7 +735,7 @@ namespace sourcegen
             head += "\n";
             if (_chkNamespace.IsChecked == true)
             {
-                head += "namespace " + _txtNamespace.Text + " {\n";
+                head += "namespace " + GetNamespace() + " {\n";
             }
             //Ctor
             head += GetFileName() + "::" + GetFileName() + "() {\n";
@@ -578,7 +747,7 @@ namespace sourcegen
             head += "\n";
             if (_chkNamespace.IsChecked == true)
             {
-                head += "}//ns " + _txtNamespace.Text + "\n";
+                head += "}//ns " + GetNamespace() + "\n";
             }
             return head;
         }
@@ -604,7 +773,7 @@ namespace sourcegen
 
             if (_chkNamespace.IsChecked == true)
             {
-                head += "package " + _txtNamespace.Text + ";\n";
+                head += "package " + GetNamespace() + ";\n";
             }
             if (_chkGenerateDoc.IsChecked == true)
             {
@@ -624,17 +793,38 @@ namespace sourcegen
         private void WriteJavaSource()
         {
             string to_write = Indent(GetJavaSource());
-            WriteFile(GetFileName() + ".java", to_write);
+
+            string fn = GetFileName();
+            if (CheckAddExts(fn))
+            {
+                fn = fn + ".java";
+            }
+            WriteSourceFile(fn, GetFileDirectory(), to_write);
         }
         private void WriteCPPHeader()
         {
             string to_write = Indent(getHeaderCommentBlock() + getHeaderBody());
-            WriteFile(GetFileName() + ".h", to_write);
+            string fn = GetFileName();
+            if (CheckAddExts(fn))
+            {
+                fn = fn + ".h";
+            }
+            WriteSourceFile(fn, GetFileDirectory(), to_write);
         }
         private void WriteCPPSource()
         {
             string to_write = Indent(GetCPPSource());
-            WriteFile(GetFileName() + ".cpp", to_write);
+            string fn = GetFileName();
+            if (CheckAddExts(fn))
+            {
+                fn = fn + ".cpp";
+            }
+            WriteSourceFile(fn, GetFileDirectory(), to_write);
+        }
+        private string GetFileDirectory()
+        {
+            string dir = _txtDefaultDirectory.Text;
+            return dir;
         }
         private Filetype GetSelectedFiletype()
         {
@@ -668,8 +858,13 @@ namespace sourcegen
             {
                 WriteCPPSource();
             }
+
+            if (_chkCloseAfterGenerate.IsChecked == true)
+            {
+                Close();
+            }
         }
-        private void WriteFile(string filename, string data)
+        private void WriteSourceFile(string filename, string directory, string data)
         {
             try
             {
@@ -680,6 +875,7 @@ namespace sourcegen
                     string ext = System.IO.Path.GetExtension(filename);
                     Microsoft.Win32.SaveFileDialog dlg = new Microsoft.Win32.SaveFileDialog();
                     dlg.FileName = filename; // Default file name
+                    dlg.InitialDirectory = directory;
                     dlg.DefaultExt = ext; // Default file extension
                     dlg.Filter = "Text documents (" + ext + ")|*" + ext; // Filter files by extension
 
@@ -692,7 +888,7 @@ namespace sourcegen
                 }
                 else
                 {
-                    selected_fname = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, filename);
+                    selected_fname = System.IO.Path.Combine(directory, filename);
                     Globals.Log("Generated Filename = " + selected_fname);
                     if (System.IO.File.Exists(selected_fname) == false)
                     {
@@ -708,6 +904,21 @@ namespace sourcegen
                 // Process save file dialog box results
                 if (continueSave == true)
                 {
+                    //Try to create file directory
+                    string dir = System.IO.Path.GetDirectoryName(selected_fname);
+                    try
+                    {
+                        if (!System.IO.Directory.Exists(dir))
+                        {
+                            System.IO.Directory.CreateDirectory(dir);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Globals.LogError("Could not create directory '" + dir + "': " + ex.ToString());
+                    }
+
+
                     using (var fs = new System.IO.FileStream(selected_fname, System.IO.FileMode.Create, System.IO.FileAccess.Write))
                     {
                         using (System.IO.StreamWriter bw = new System.IO.StreamWriter(fs))
@@ -722,7 +933,6 @@ namespace sourcegen
                 Globals.LogError("Error writing file: " + ex.ToString());
             }
         }
-
         private void SelectFileType(Filetype ft)
         {
             foreach (object o in _cboFileType.Items)
@@ -765,43 +975,96 @@ namespace sourcegen
                 _optionsHeight -= GetToggleHeight();
             }
         }
-        private List<string> GetSelectedExtensions()
+        private bool CheckAddExts(string filename)
         {
-            Filetype ft = GetSelectedFiletype();
-            string x = ExtensionList.Get(ft);
-            List<string> ret = new List<string>() { ".error" };
-            if (x != null)
+            //Return true if we need to add the filename extension based on the selected type.
+            bool addExts = true;
+            string fext = System.IO.Path.GetExtension(filename);
+            if (String.IsNullOrEmpty(fext) == false)
             {
-                ret = x.Split(',').ToList();
+                string e = fext.Trim().ToLower();
+                if (e.Equals(".java") || e.Equals(".cpp") || e.Equals(".h"))
+                {
+                    addExts = false;
+                }
             }
-            return ret;
+            return addExts;
         }
         private void UpdateFilenamePreview()
         {
             if (_txtFilenamePreview != null)
             {
-                string add_dir = (_chkPromptToSave.IsChecked == false) ? "./" : "";
-                _txtFilenamePreview.Text = "";
-                foreach (string ext in GetSelectedExtensions())
+                string filename = _txtFilename.Text;
+                bool addExts = CheckAddExts(filename);
+                string add_dir = "";
+                if (_chkPromptToSave.IsChecked == false)
                 {
-                    _txtFilenamePreview.Text += add_dir + _txtFilename.Text + ext + "\r\n";
+                    add_dir = GetFileDirectory();
+                }
+
+                if (addExts)
+                {
+                    _txtFilenamePreview.Text = "";
+                    List<string> exts = ExtensionList.Get(GetSelectedFiletype());
+                    if (exts != null)
+                    {
+                        foreach (string ext in exts)
+                        {
+                            _txtFilenamePreview.Text += System.IO.Path.Combine(add_dir , filename + ext) + "\r\n";
+                        }
+                    }
+                }
+                else
+                {
+                    _txtFilenamePreview.Text = System.IO.Path.Combine(add_dir, filename );
                 }
             }
         }
-
+        private void UserInputFiletype()
+        {
+            string ext = System.IO.Path.GetExtension(_txtFilename.Text);
+            Filetype t = ExtensionList.ExtensionToFiletype(ext, true);
+            if (t != Filetype.None)
+            {
+                _eUserInputType = t;
+                SelectFileType(t);
+            }
+        }
         #endregion
 
-        private void _chkGenerateDoc_Checked(object sender, RoutedEventArgs e)
+        private void _btnEditDefaultDirectory_Click(object sender, RoutedEventArgs e)
         {
-            bool b = (_chkGenerateDoc.IsChecked == true);
-            _chkAuthor.IsChecked = _chkAuthor.IsEnabled = b;
-            _chkCopyright.IsChecked = _chkCopyright.IsEnabled = b;
-            _chkLicense.IsChecked = _chkLicense.IsEnabled = b;
-            _chkDateTime.IsChecked = _chkDateTime.IsEnabled = b;
-            //_chk.IsEnabled = _chkAuthor.IsChecked = (_chkGenerateDoc.IsChecked == true);
+            try
+            {
+                var dialog = new Ookii.Dialogs.Wpf.VistaFolderBrowserDialog();
+                if (dialog.ShowDialog(this).GetValueOrDefault())
+                {
+                    _txtDefaultDirectory.Text = dialog.SelectedPath;
+                }
+            }
+            catch (Exception ex)
+            {
+                Globals.LogError(ex.ToString());
+            }
+        }
+        Brush _defaultTextboxBorderBrush = null;
+        private void UpdateFilenameHighlight()
+        {
+            if (_defaultTextboxBorderBrush == null)
+            {
+                _defaultTextboxBorderBrush = _txtFilename.BorderBrush;
+            }
+            if (String.IsNullOrEmpty(_txtFilename.Text.Trim()))
+            {
+                _txtFilename.BorderBrush = Brushes.Red;
+            }
+            else
+            {
+                _txtFilename.BorderBrush = _defaultTextboxBorderBrush;
+            }
         }
 
-        private void _chkPromptToSave_Checked(object sender, RoutedEventArgs e)
+        private void _txtDefaultDirectory_TextChanged(object sender, TextChangedEventArgs e)
         {
             UpdateFilenamePreview();
         }

@@ -15,7 +15,7 @@ namespace sourcegen
         }
         public void Save()
         {
-            SaveAs(LoadedOrSavedFileName);
+            SaveAs(LoadedOrSavedFileName, true);
         }
 
         public virtual void PostLoad()
@@ -23,14 +23,14 @@ namespace sourcegen
             //Override to post load stuff
         }
 
-        public abstract void SaveAs(string loc);
+        public abstract void SaveAs(string loc, bool createDirectory);
         public abstract object Load(string loc);
 
-        public object CreateOrLoad(string loc)
+        public object CreateOrLoad(string loc, bool createDirectory)
         {
             if (!System.IO.File.Exists(loc))
             {
-                SaveAs(loc);
+                SaveAs(loc, createDirectory);
             }
 
             return Load(loc);
@@ -39,17 +39,28 @@ namespace sourcegen
 
     public class ConfigFile<T> : OutFile where T : ConfigFile<T>
     {
-        public override void SaveAs(string loc)
+        public override void SaveAs(string loc, bool createDirectory)
         {
             System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
             sw.Start();
             {
                 LoadedOrSavedFileName = loc;
+
                 string jsonLoc = Path.Combine(Path.GetDirectoryName(loc), Path.GetFileNameWithoutExtension(loc) + ".json");
+
+                if (createDirectory)
+                {
+                    string dir = Path.GetDirectoryName(jsonLoc);
+                    if (!System.IO.Directory.Exists(dir))
+                    {
+                        System.IO.Directory.CreateDirectory(dir);
+                    }
+                }
+
                 try
                 {
                     string output = JsonConvert.SerializeObject(this as T);
-                    File.WriteAllText(loc, output);
+                    File.WriteAllText(jsonLoc, output);
                 }
                 catch (Exception ex)
                 {
@@ -108,6 +119,8 @@ namespace sourcegen
 
         public bool _bCloseAfterGenerating = true;
         public bool _bPromptSave = true;
+
+        public string _strDefaultSaveLocation = "";
     }
 
 

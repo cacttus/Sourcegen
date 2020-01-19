@@ -1,6 +1,7 @@
 debug
 release
 .vs
+/packages
 sourcegen.ncb
 sourcegen.suo
 sourcegen/Debug
