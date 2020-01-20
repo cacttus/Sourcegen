@@ -13,7 +13,10 @@ namespace sourcegen
         private static string _log = "";
         public static MainWindow MainWindow = null;
         public static About About = null;
-
+        public static string Dequote(string a)
+        {
+            return a.Replace('"', ' ').Trim();
+        }
         public static void LogError(string x)
         {
             Log("Error:" + x);
@@ -21,14 +24,26 @@ namespace sourcegen
         public static string GetTitle()
         {
             string st = System.Reflection.Assembly.GetExecutingAssembly().GetName().Name;
+            st = st[0].ToString().ToUpper() + st.Substring(1);
+
             return st;
+        }
+        public static string GetFullVersion()
+        {
+            Version version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            DateTime buildDate = new DateTime(2000, 1, 1)
+                                     .AddDays(version.Build).AddSeconds(version.Revision * 2);
+            string displayableVersion = $"{version} ({buildDate})";
+            return displayableVersion;
         }
         public static string GetVersion()
         {
             Version version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-            DateTime buildDate = new DateTime(2000, 1, 1)
-                                    .AddDays(version.Build).AddSeconds(version.Revision * 2);
-            string displayableVersion = $"{version} ({buildDate})";
+
+            // DateTime buildDate = new DateTime(2000, 1, 1)
+            //                         .AddDays(version.Build).AddSeconds(version.Revision * 2);
+            string displayableVersion = $"{version}";// ({buildDate})";
+            displayableVersion = displayableVersion.Substring(0,displayableVersion.LastIndexOf('.'));
             return displayableVersion;
         }
         public static void Log(string x)

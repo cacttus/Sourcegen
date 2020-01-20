@@ -99,8 +99,8 @@ namespace sourcegen
 
     public class Settings : ConfigFile<Settings>
     {
-        public Filetype Filetype = Filetype.CPP_Class;
-         
+        //public Filetype Filetype = Filetype.CPP_Class;
+
         public bool _bComments = true;
         public bool _bLicense = true;
         public string _strLicense = "BSD License";
@@ -109,7 +109,7 @@ namespace sourcegen
         public bool _bCopyright = true;
         public string _strCopyright = "Copyright (c) Me";
         public bool _bDate = true;
-         
+
         public bool _bBaseClass = true;
         public string _strBaseClass = "MyBaseClass";
         public bool _bNamespace = true;
@@ -119,7 +119,9 @@ namespace sourcegen
 
         public bool _bCloseAfterGenerating = true;
         public bool _bPromptSave = true;
-
+        public bool _bOpenFolders = true;
+        public bool _bAutoOverwrite = false;
+        public bool _bPromptOverwrite = true;
         public string _strDefaultSaveLocation = "";
     }
 

@@ -1,20 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
-using System.Text;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
 
 namespace sourcegen
 {
@@ -140,12 +135,11 @@ namespace sourcegen
 
     public partial class MainWindow : Window
     {
-        private List<TextBox> _dataControls;
-        private double _optionsHeight = 0;
         private KeyboardHook _hook = null; //Literally, one of the best gems in a while.
-        private bool _bEditedNamespace = false;
-        private Filetype _eUserInputType = Filetype.None;
         private static string DefaultSettingsFileName = "DefaultSettings.json";
+        private string c_strHelperText = "Type Files Here";
+        private bool _bMouseDown = false;
+        private System.Drawing.Point? _vLastMouse = null;
 
         public MainWindow()
         {
@@ -155,13 +149,25 @@ namespace sourcegen
             Globals.About = new About();
 
             _hook = new KeyboardHook();
-            _hook.KeyDown += new KeyboardHook.HookEventHandler(OnHookKeyDown);
+            _hook.KeyDown += new KeyboardHook.HookEventHandler((object sender, HookEventArgs e)=> {
+                UInt32 key = e.key;
+                if (key == 13)//enter
+                {
+                    Generate();
+                }
+                else if(key == 27)//esc
+                {
+                    Close();
+                }
+            });
 
             this.Title = Globals.GetTitle() + " v" + Globals.GetVersion();
+
+            AllowUserToMoveWindowByDragging();
+
         }
 
         #region Public: Methods
-
         public void SetStatus(string x)
         {
             _lblStatus.Content = x;
@@ -173,21 +179,13 @@ namespace sourcegen
         {
             NewConfig();
             LoadDefaultSettings();
-            _txtFilename.Text = "";
+            SetFilenameTextboxIndicator();
+
             Keyboard.Focus(_txtFilename);
-            UpdateFilenameHighlight();
-        }
-        private void _grpOptions_Expanded1(object sender, RoutedEventArgs e)
-        {
-            throw new NotImplementedException();
         }
         private void About_MenuItem_Click(object sender, RoutedEventArgs e)
         {
             Globals.About.Show();
-        }
-        private void _btnGenerate_Click(object sender, RoutedEventArgs e)
-        {
-            Generate();
         }
         private void _txtSpaces_PreviewTextInput(object sender, TextCompositionEventArgs e)
         {
@@ -197,43 +195,30 @@ namespace sourcegen
         {
             _txtLicense.Text = GetBSDLicense();
         }
+        private void _txtFilename_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (_txtFilename != null && _txtFilenamePreview != null)
+            {
+                //If user deleted last char, then put this text back.
+                if (_txtFilename.Text.Length == 1 && _txtFilename.SelectionStart > 0 && e.Key == Key.Back)
+                {
+                    SetFilenameTextboxIndicator();
+                }
+                else
+                {
+                    ClearFilenameTextboxIndicator();
+                }
+            }
+        }
         private void _txtFilename_TextChanged(object sender, TextChangedEventArgs e)
         {
-            UpdateFilenamePreview();
-            UserInputFiletype();
-            UpdateFilenameHighlight();
-        }
-        private void _cboFileType_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            Filetype ft = GetSelectedFiletype();
-            if (ft == Filetype.Java)
+            if (_txtFilenamePreview != null)
             {
-                if (_bEditedNamespace == false)
-                {
-                    _chkNamespace.Content = "Package";
-                    _txtNamespace.Text = "My.Package";
-                }
-                _grpOptions.IsEnabled = true;
+                UpdateFilenamePreview();
             }
-            else if (ft == Filetype.CPP_Class || ft == Filetype.CPP_Header || ft == Filetype.CPP_Source)
-            {
-                if (_bEditedNamespace == false)
-                {
-                    _chkNamespace.Content = "Namespace";
-                    _txtNamespace.Text = "MyNamespace";
-                }
-                _grpOptions.IsEnabled = true;
-            }
-            _grpOptions.IsEnabled = (ft != Filetype.None);
-
-            _btnGenerate.IsEnabled = _grpOptions.IsEnabled;
-
-            UpdateFilenamePreview();
         }
         private void _Configure_Shake(object sender, RoutedEventArgs e)
         {
-            SelectFileType(Filetype.CPP_Class);
-
             _chkLicense.IsChecked = true;
             _txtLicense.Text = GetBSDLicense();
 
@@ -255,8 +240,6 @@ namespace sourcegen
         }
         private void _Configure_MonogameToolkit(object sender, RoutedEventArgs e)
         {
-            SelectFileType(Filetype.CPP_Class);
-
             _chkLicense.IsChecked = true;
             _txtLicense.Text = GetBSDLicense();
 
@@ -302,7 +285,7 @@ namespace sourcegen
         }
         private void _grpOptions_Expanded(object sender, RoutedEventArgs e)
         {
-            ExpandOrContractOptionsArea();
+            UpdateFormHeight();
         }
         private void Window_Closed(object sender, EventArgs e)
         {
@@ -331,11 +314,6 @@ namespace sourcegen
         {
             _txtSpaces.IsEnabled = (_chkUseTabs.IsChecked == true);
         }
-        private void _txtNamespace_KeyDown(object sender, KeyEventArgs e)
-        {
-            //This is a little gimmick to show the preview.
-            _bEditedNamespace = true;
-        }
         private void _chkGenerateDoc_Checked(object sender, RoutedEventArgs e)
         {
             bool b = (_chkGenerateDoc.IsChecked == true);
@@ -343,11 +321,27 @@ namespace sourcegen
             _chkCopyright.IsChecked = _chkCopyright.IsEnabled = b;
             _chkLicense.IsChecked = _chkLicense.IsEnabled = b;
             _chkDateTime.IsChecked = _chkDateTime.IsEnabled = b;
-            //_chk.IsEnabled = _chkAuthor.IsChecked = (_chkGenerateDoc.IsChecked == true);
         }
         private void _chkPromptToSave_Checked(object sender, RoutedEventArgs e)
         {
-            _txtDefaultDirectory.IsEnabled = (_chkPromptToSave.IsChecked == false);
+            bool noPrompt = (_chkPromptToSave.IsChecked == false);
+            if (_txtDefaultDirectory != null)
+            {
+                _txtDefaultDirectory.Visibility = ToggleVisibility(noPrompt);
+            }
+            if (_btnEditDefaultDirectory != null)
+            {
+                _btnEditDefaultDirectory.Visibility = ToggleVisibility(noPrompt);
+            }
+            if (_lblPromptSave != null)
+            {
+                _lblPromptSave.Visibility = ToggleVisibility(noPrompt);
+            }
+            if (_chkAutoOverwrite != null && _chkPromptOverwrite != null)
+            {
+                _chkAutoOverwrite.Visibility = ToggleVisibility(noPrompt);
+                _chkPromptOverwrite.Visibility = ToggleVisibility(noPrompt && (_chkAutoOverwrite.IsChecked == false));
+            }
             UpdateFilenamePreview();
         }
         private void _chkDefaultSettings_Click(object sender, RoutedEventArgs e)
@@ -361,9 +355,77 @@ namespace sourcegen
                 ClearDefaultSettings();
             }
         }
+        private void _btnEditDefaultDirectory_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var dialog = new Ookii.Dialogs.Wpf.VistaFolderBrowserDialog();
+                if (dialog.ShowDialog(this).GetValueOrDefault())
+                {
+                    _txtDefaultDirectory.Text = dialog.SelectedPath;
+                }
+            }
+            catch (Exception ex)
+            {
+                Globals.LogError(ex.ToString());
+            }
+        }
+        private void _txtDefaultDirectory_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            UpdateFilenamePreview();
+        }
+        private void _txtFilename_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            ClearFilenameTextboxIndicator();
+        }
+        private void _txtFilenamePreview_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            UpdateFormHeight();
+        }
+        private void _chkAutoOverwrite_Checked(object sender, RoutedEventArgs e)
+        {
+            _chkPromptOverwrite.Visibility = ToggleVisibility(_chkAutoOverwrite.IsChecked == false);
+        }
+        private void _Generate_Click(object sender, RoutedEventArgs e)
+        {
+            Generate();
+        }
         #endregion
 
         #region Private:Methods
+        private void AllowUserToMoveWindowByDragging()
+        {
+            //Lots of low level windows BS
+            MouseHook.HookWindow((WM code) =>
+            {
+                if (code == WM.MOUSEMOVE || code == WM.NCMOUSEMOVE)
+                {
+                    if (_bMouseDown)
+                    {
+                        System.Drawing.Point curMouse = MouseHook.GetMousePosition();
+                        if (_vLastMouse != null)
+                        {
+                            System.Drawing.Point delta = new System.Drawing.Point(
+                                _vLastMouse.Value.X - curMouse.X,
+                                _vLastMouse.Value.Y - curMouse.Y);
+                            Top -= delta.Y;
+                            Left -= delta.X;
+                        }
+                        _vLastMouse = new System.Drawing.Point(curMouse.X, curMouse.Y);
+                    }
+                }
+            });
+        }
+        private void _MoveWindow_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            System.Drawing.Point curMouse = MouseHook.GetMousePosition();
+            _vLastMouse = new System.Drawing.Point(curMouse.X, curMouse.Y);
+            _bMouseDown = true;
+        }
+        private void _MoveWindow_MouseUp(object sender, MouseButtonEventArgs e)
+        {
+            _bMouseDown = false;
+        }
         private static string GetSettingsFilePath()
         {
             string ad = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
@@ -426,45 +488,13 @@ namespace sourcegen
                 Globals.LogError(ex.ToString());
             }
         }
-        private void OnHookKeyDown(object sender, HookEventArgs e)
-        {
-            UInt32 key = e.key;
-            if (key == 13)
-            {
-                Generate();
-            }
-        }
         private void NewConfig()
         {
             _txtFilenamePreview.Text = "";
-            _dataControls = new List<TextBox>() {
-                _txtLicense,
-                _txtAuthor,
-                _txtCopyright,
-                _txtNamespace,
-                _txtBaseClass};
-
-            foreach (TextBox t in _dataControls)
-            {
-                DisableHide(t, null);
-            }
-            _grpOptions.IsEnabled = true;
             _grpOptions.IsExpanded = true;
-
             _grpOptions.IsExpanded = false;
-            _grpOptions.IsEnabled = false;
 
             _txtLicense.Text = GetBSDLicense();
-
-            //Populate listbox
-            foreach (Filetype v in Enum.GetValues(typeof(Filetype)).Cast<Filetype>())
-            {
-                string desc = Globals.GetEnumDescription((Filetype)v);
-                ListBoxItem lbi = new ListBoxItem();
-                lbi.Content = desc;
-                lbi.Tag = v;
-                _cboFileType.Items.Add(lbi);
-            }
         }
         private void SaveConfig()
         {
@@ -493,7 +523,7 @@ namespace sourcegen
         private void SaveConfigToFile(string fullPath)
         {
             Settings set = new Settings();
-            set.Filetype = GetSelectedFiletype();
+            //set.Filetype = GetSelectedFiletype();
 
             set._bComments = _chkGenerateDoc.IsChecked == true;
             set._bLicense = _chkLicense.IsChecked == true;
@@ -513,8 +543,11 @@ namespace sourcegen
 
             set._bCloseAfterGenerating = _chkCloseAfterGenerate.IsChecked == true;
             set._bPromptSave = _chkPromptToSave.IsChecked == true;
-
+            set._bOpenFolders = _chkOpenContainingFoldersAfterGenerating.IsChecked == true;
             set._strDefaultSaveLocation = _txtDefaultDirectory.Text;
+
+            set._bAutoOverwrite = _chkAutoOverwrite.IsChecked == true;
+            set._bPromptOverwrite = _chkPromptOverwrite.IsChecked == true;
 
             set.SaveAs(fullPath, true);
         }
@@ -548,7 +581,6 @@ namespace sourcegen
 
             if (set != null)
             {
-                SelectFileType(set.Filetype);
                 _chkGenerateDoc.IsChecked = set._bComments;
                 _chkLicense.IsChecked = set._bLicense;
                 _txtLicense.Text = set._strLicense;
@@ -567,30 +599,39 @@ namespace sourcegen
 
                 _chkCloseAfterGenerate.IsChecked = set._bCloseAfterGenerating;
                 _chkPromptToSave.IsChecked = set._bPromptSave;
+                _chkOpenContainingFoldersAfterGenerating.IsChecked = set._bOpenFolders;
+
+                _chkAutoOverwrite.IsChecked = set._bAutoOverwrite;
+                _chkPromptOverwrite.IsChecked = set._bPromptOverwrite;
 
                 _txtDefaultDirectory.Text = set._strDefaultSaveLocation;
-
-                _bEditedNamespace = true;   //Prevent default namespace from beging replaced
             }
             else
             {
                 throw new Exception("Failed to load, could not cast the JSON to a Settings class.");
             }
         }
-        private double GetToggleHeight()
+        private void SetFilenameTextboxIndicator()
         {
-            //Doesn't work.
-            //if (VisualTreeHelper.GetChildrenCount(_grpOptions) > 0)
-            //{
-            //    var border = VisualTreeHelper.GetChild(_grpOptions, 0);
-            //    var dockpanel = VisualTreeHelper.GetChild(border, 0);
-            //    var togglebutton = VisualTreeHelper.GetChild(dockpanel, 0); // it may be not 0th, so please enumerate all children using VisualTreeHelper.GetChildrenCount(dockpanel) and find that ToggleButton
-            //    if ((togglebutton as Button) != null)
-            //    {
-            //        return (togglebutton as Button).ActualHeight;
-            //    }
-            //}
-            return 30;
+            if (_txtFilename != null)
+            {
+                _txtFilename.Text = c_strHelperText;
+                _txtFilename.FontStyle = FontStyles.Italic;
+                _txtFilename.Foreground = Brushes.SlateGray;
+            }
+        }
+        private void ClearFilenameTextboxIndicator()
+        {
+            //Call this after first key is pressed in textbox.
+            if (_txtFilename != null)
+            {
+                if (_txtFilename.FontStyle == FontStyles.Italic)
+                {
+                    _txtFilename.Text = "";
+                    _txtFilename.FontStyle = FontStyles.Normal;
+                    _txtFilename.Foreground = Brushes.Black;
+                }
+            }
         }
         private string GetFileName()
         {
@@ -790,81 +831,151 @@ namespace sourcegen
 
             return head;
         }
-        private void WriteJavaSource()
-        {
-            string to_write = Indent(GetJavaSource());
-
-            string fn = GetFileName();
-            if (CheckAddExts(fn))
-            {
-                fn = fn + ".java";
-            }
-            WriteSourceFile(fn, GetFileDirectory(), to_write);
-        }
-        private void WriteCPPHeader()
-        {
-            string to_write = Indent(getHeaderCommentBlock() + getHeaderBody());
-            string fn = GetFileName();
-            if (CheckAddExts(fn))
-            {
-                fn = fn + ".h";
-            }
-            WriteSourceFile(fn, GetFileDirectory(), to_write);
-        }
-        private void WriteCPPSource()
-        {
-            string to_write = Indent(GetCPPSource());
-            string fn = GetFileName();
-            if (CheckAddExts(fn))
-            {
-                fn = fn + ".cpp";
-            }
-            WriteSourceFile(fn, GetFileDirectory(), to_write);
-        }
         private string GetFileDirectory()
         {
             string dir = _txtDefaultDirectory.Text;
             return dir;
         }
-        private Filetype GetSelectedFiletype()
+        private List<string> GetCleanFileNames()
         {
-            if (_cboFileType.SelectedItem != null)
+            //Split strings by quotes
+            string text = _txtFilename.Text;
+            string[] names = Regex.Matches(text, @"[\""].+?[\""]|[^ ]+")
+                .Cast<Match>()
+                .Select(m => m.Value)
+                .ToArray();
+            //Clean up possible errors in the array.
+            names = names.Select(x => x.Trim()).ToArray();
+            names = names.Select(x => x.Replace(",", "")).ToArray();
+            names = names.Select(x => x.Replace("\"", "")).ToArray();
+            names = names.Where(x => x.Length > 0).ToArray();
+
+            List<string> namesList = names.ToList();
+            return namesList;
+        }
+        private Filetype GetFileType(string file)
+        {
+            string ext = System.IO.Path.GetExtension(file);
+            Filetype ret = ExtensionList.ExtensionToFiletype(ext, true);
+            return ret;
+        }
+        private List<string> GetFilesToGenerate()
+        {
+            List<string> files_fullpath = new List<string>();
+            if (_chkPromptToSave != null)
             {
-                Filetype? tag = (_cboFileType.SelectedItem as ListBoxItem).Tag as Filetype?;
-                if (tag != null)
+                if (!_txtFilename.Text.Equals(c_strHelperText))
                 {
-                    return tag.Value;
+                    List<string> files = GetCleanFileNames();
+
+                    //If "prompt to save" is checked, then the SaveFileDialog will handle the location of the file.
+                    string add_dir = "";
+                    if (_chkPromptToSave.IsChecked == false)
+                    {
+                        add_dir = GetFileDirectory();
+                    }
+
+                    foreach (string file in files)
+                    {
+                        try
+                        {
+                            string file_with_dir = "";
+                            string specified_dir = System.IO.Path.GetDirectoryName(file);
+                            if (specified_dir.Trim().Length > 0)
+                            {
+                                //User specified a directory specifically.  Don't add the default directory.
+                                file_with_dir = file;
+                            }
+                            else
+                            {
+                                file_with_dir = System.IO.Path.Combine(add_dir, file);
+                            }
+                            files_fullpath.Add(file_with_dir);
+                        }
+                        catch (Exception ex)
+                        {
+                            Globals.LogError("Error processing file " + file + " =>\r\n " + ex.ToString());
+                        }
+                    }
                 }
             }
-            return Filetype.None;
+
+            return files_fullpath;
         }
         private void Generate()
         {
-            Filetype ft = GetSelectedFiletype();
-            if (ft == Filetype.Java)
+            List<string> files = GetFilesToGenerate();
+
+            foreach (string file in files)
             {
-                WriteJavaSource();
+                Filetype ft = GetFileType(file);
+                if (ft == Filetype.Java)
+                {
+                    string to_write = Indent(GetJavaSource());
+                    WriteSourceFile(file, to_write);
+                }
+                else if (ft == Filetype.CPP_Class)
+                {
+                    WriteSourceFile(file, Indent(getHeaderCommentBlock() + getHeaderBody()));
+                    WriteSourceFile(file, Indent(GetCPPSource()));
+                }
+                else if (ft == Filetype.CPP_Header)
+                {
+                    WriteSourceFile(file, Indent(getHeaderCommentBlock() + getHeaderBody()));
+                }
+                else if (ft == Filetype.CPP_Source)
+                {
+                    WriteSourceFile(file, Indent(GetCPPSource()));
+                }
             }
-            else if (ft == Filetype.CPP_Class)
+
+            if (_chkOpenContainingFoldersAfterGenerating.IsChecked == true)
             {
-                WriteCPPHeader();
-                WriteCPPSource();
+                OpenGeneratedFileFolders();
             }
-            else if (ft == Filetype.CPP_Header)
-            {
-                WriteCPPHeader();
-            }
-            else if (ft == Filetype.CPP_Source)
-            {
-                WriteCPPSource();
-            }
+
+            _lstGeneratedFiles.Clear();
 
             if (_chkCloseAfterGenerate.IsChecked == true)
             {
                 Close();
             }
         }
-        private void WriteSourceFile(string filename, string directory, string data)
+        private void OpenGeneratedFileFolders()
+        {
+            //De-dupe paths
+            List<string> uniquePaths = new List<string>();
+            List<string> uniqueFiles = new List<string>();
+            foreach (string file in _lstGeneratedFiles)
+            {
+                string path = System.IO.Path.GetDirectoryName(file).Trim();
+                if (!uniquePaths.Contains(path))
+                {
+                    uniquePaths.Add(path);
+                    uniqueFiles.Add(file);
+                }
+            }
+            //Open all unique folders.
+            foreach (string file in uniqueFiles)
+            {
+                try
+                {
+                    //https://stackoverflow.com/questions/334630/opening-a-folder-in-explorer-and-selecting-a-file
+                    //string path = System.IO.Path.GetDirectoryName(file);
+                    string file_mod = file;
+                    file_mod = file_mod.Replace('/', '\\');
+                    string argument = "/select, \"" + file_mod + "\"";
+                    System.Diagnostics.Process.Start("explorer.exe", argument);
+                }
+
+                catch (Exception ex)
+                {
+                    Globals.LogError(ex.ToString());
+                }
+            }
+        }
+        private List<string> _lstGeneratedFiles = new List<string>();
+        private void WriteSourceFile(string filename_full, string data)
         {
             try
             {
@@ -872,6 +983,9 @@ namespace sourcegen
                 string selected_fname = "";
                 if (_chkPromptToSave.IsChecked == true)
                 {
+                    string directory = System.IO.Path.GetDirectoryName(filename_full);
+                    string filename = System.IO.Path.GetFileName(filename_full);
+
                     string ext = System.IO.Path.GetExtension(filename);
                     Microsoft.Win32.SaveFileDialog dlg = new Microsoft.Win32.SaveFileDialog();
                     dlg.FileName = filename; // Default file name
@@ -888,16 +1002,36 @@ namespace sourcegen
                 }
                 else
                 {
-                    selected_fname = System.IO.Path.Combine(directory, filename);
-                    Globals.Log("Generated Filename = " + selected_fname);
-                    if (System.IO.File.Exists(selected_fname) == false)
+                    selected_fname = filename_full;
+                    if (_chkAutoOverwrite.IsChecked == false)
                     {
-                        //We could add to "overwrite file" here, if we want.
-                        continueSave = true;
+                        if (System.IO.File.Exists(filename_full) == false)
+                        {
+                            //We could add to "overwrite file" here, if we want.
+                            continueSave = true;
+                        }
+                        else
+                        {
+                            if (_chkPromptOverwrite.IsChecked == true)
+                            {
+                                MessageBoxResult mr = MessageBox.Show("Overwrite '" + selected_fname + "'?", "Confirm Overwrite",
+                                    MessageBoxButton.YesNo, MessageBoxImage.Exclamation);
+                                if (mr == MessageBoxResult.Yes)
+                                {
+                                    continueSave = true;
+                                }
+                            }
+                            else
+                            {
+                                Globals.LogError("File '" + filename_full + "' already exists.");
+                            }
+
+                        }
                     }
                     else
                     {
-                        Globals.LogError("File '" + filename + "' already exists.");
+                        Globals.Log("Overwriting '" + filename_full + "'.");
+                        continueSave = true;
                     }
                 }
 
@@ -926,6 +1060,8 @@ namespace sourcegen
                             bw.Write(data);
                         }
                     }
+                    _lstGeneratedFiles.Add(selected_fname);
+                    Globals.Log("Generated Filename = " + selected_fname);
                 }
             }
             catch (Exception ex)
@@ -933,140 +1069,114 @@ namespace sourcegen
                 Globals.LogError("Error writing file: " + ex.ToString());
             }
         }
-        private void SelectFileType(Filetype ft)
-        {
-            foreach (object o in _cboFileType.Items)
-            {
-                if (o is ListBoxItem)
-                {
-                    Filetype? tag = (o as ListBoxItem).Tag as Filetype?;
-
-                    if (tag != null && tag == ft)
-                    {
-                        _cboFileType.SelectedItem = o;
-                        break;
-                    }
-                }
-            }
-        }
         private void DisableHide(TextBox tb, CheckBox ch)
         {
             bool bEnabled = (ch == null) ? false : (ch.IsChecked == true);
             tb.IsEnabled = bEnabled;
         }
-        private void ExpandOrContractOptionsArea()
+        private double GetExpanderTitleHeight(Expander exp)
         {
-            if (_optionsHeight > 0)
-            {
-                if (_grpOptions.IsExpanded == true)
-                {
-                    this.Height += _optionsHeight;
-                }
-                else
-                {
-                    this.Height -= _optionsHeight;
-                }
-            }
-
-            //Compute Expanded Height AFTER first expanding the options
-            if (_grpOptions.IsExpanded)
-            {
-                _optionsHeight = _grpOptions.ActualHeight;
-                _optionsHeight -= GetToggleHeight();
-            }
+            return 45;//yep
         }
-        private bool CheckAddExts(string filename)
+        private void UpdateFormHeight()
         {
-            //Return true if we need to add the filename extension based on the selected type.
-            bool addExts = true;
-            string fext = System.IO.Path.GetExtension(filename);
-            if (String.IsNullOrEmpty(fext) == false)
-            {
-                string e = fext.Trim().ToLower();
-                if (e.Equals(".java") || e.Equals(".cpp") || e.Equals(".h"))
-                {
-                    addExts = false;
-                }
-            }
-            return addExts;
-        }
-        private void UpdateFilenamePreview()
-        {
-            if (_txtFilenamePreview != null)
-            {
-                string filename = _txtFilename.Text;
-                bool addExts = CheckAddExts(filename);
-                string add_dir = "";
-                if (_chkPromptToSave.IsChecked == false)
-                {
-                    add_dir = GetFileDirectory();
-                }
+            _grpOptions.Margin = new Thickness(
+            _grpOptions.Margin.Left,
+            _txtFilenamePreview.Margin.Top + _txtFilenamePreview.ActualHeight,
+            _grpOptions.Margin.Right,
+            _grpOptions.Margin.Bottom);
 
-                if (addExts)
+            //Probably not the Best way to do this, but for now, it works.
+            List<Control> controls = new List<Control> {
+                _mnuMenu,_txtFilename,_txtFilenamePreview, _grpOptions,_statusBar
+            };
+            double height = 0;
+            foreach (Control child in controls)
+            {
+                if (child is Expander)
                 {
-                    _txtFilenamePreview.Text = "";
-                    List<string> exts = ExtensionList.Get(GetSelectedFiletype());
-                    if (exts != null)
+                    if (!(child as Expander).IsExpanded)
                     {
-                        foreach (string ext in exts)
-                        {
-                            _txtFilenamePreview.Text += System.IO.Path.Combine(add_dir , filename + ext) + "\r\n";
-                        }
+                        height += GetExpanderTitleHeight(_grpOptions);
+                    }
+                    else
+                    {
+                        height += _grpOptions.ActualHeight + 15;
                     }
                 }
                 else
                 {
-                    _txtFilenamePreview.Text = System.IO.Path.Combine(add_dir, filename );
+                    var prop = child.GetType().GetProperty("ActualHeight");
+                    if (prop != null)
+                    {
+                        object b = prop.GetValue(child, null);
+                        if (b != null && b is double)
+                        {
+                            height += (double)b;
+                        }
+                    }
                 }
+
+            }
+
+            Height = height;
+        }
+        private void UpdateFilenamePreview()
+        {
+            //Reset the height, then catch the height reset in SizeChanged
+            if (_txtFilenamePreview != null)
+            {
+                List<string> files = GetFilesToGenerate();
+                if (files != null && files.Count > 0)
+                {
+                    _txtFilenamePreview.Text = string.Join("\r\n", files);
+                }
+                else
+                {
+                    _txtFilenamePreview.Text = "";
+                }
+                _txtFilenamePreview.Height = GetFilenamePreviewBoxHeight() + 10;
+                //Form height gets updated when the SizeChanged event gets fired.
             }
         }
-        private void UserInputFiletype()
+        private Size MeasureString(TextBox tb)
         {
-            string ext = System.IO.Path.GetExtension(_txtFilename.Text);
-            Filetype t = ExtensionList.ExtensionToFiletype(ext, true);
-            if (t != Filetype.None)
+            var formattedText = new FormattedText(
+                tb.Text,
+                CultureInfo.CurrentCulture,
+                FlowDirection.LeftToRight,
+                new Typeface(tb.FontFamily, tb.FontStyle, tb.FontWeight, tb.FontStretch),
+                tb.FontSize,
+                Brushes.Black,
+                new NumberSubstitution(),
+                1);
+
+            return new Size(formattedText.Width, formattedText.Height);
+        }
+        private double GetFilenamePreviewBoxHeight()
+        {
+            double ret = 0;
+            if (!_txtFilename.Text.Equals(c_strHelperText))
             {
-                _eUserInputType = t;
-                SelectFileType(t);
+                if (_txtFilename.Text.Trim().Length > 0)
+                {
+                    ret += (_txtFilenamePreview.Text.Count(x => x == '\n') + 1) * MeasureString(_txtFilename).Height;//.FontSize;
+                }
+            }
+            return ret;
+        }
+        private Visibility ToggleVisibility(bool b)
+        {
+            if (b)
+            {
+                return Visibility.Visible;
+            }
+            else
+            {
+                return Visibility.Hidden;
             }
         }
         #endregion
 
-        private void _btnEditDefaultDirectory_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                var dialog = new Ookii.Dialogs.Wpf.VistaFolderBrowserDialog();
-                if (dialog.ShowDialog(this).GetValueOrDefault())
-                {
-                    _txtDefaultDirectory.Text = dialog.SelectedPath;
-                }
-            }
-            catch (Exception ex)
-            {
-                Globals.LogError(ex.ToString());
-            }
-        }
-        Brush _defaultTextboxBorderBrush = null;
-        private void UpdateFilenameHighlight()
-        {
-            if (_defaultTextboxBorderBrush == null)
-            {
-                _defaultTextboxBorderBrush = _txtFilename.BorderBrush;
-            }
-            if (String.IsNullOrEmpty(_txtFilename.Text.Trim()))
-            {
-                _txtFilename.BorderBrush = Brushes.Red;
-            }
-            else
-            {
-                _txtFilename.BorderBrush = _defaultTextboxBorderBrush;
-            }
-        }
-
-        private void _txtDefaultDirectory_TextChanged(object sender, TextChangedEventArgs e)
-        {
-            UpdateFilenamePreview();
-        }
     }
 }

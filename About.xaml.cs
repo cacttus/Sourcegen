@@ -23,15 +23,17 @@ namespace sourcegen
         {
             InitializeComponent();
             _txtInfo.Text =
-                "Sourcegen\n" +
+                Globals.GetTitle() + " v" + Globals.GetFullVersion() + "\r\n" +
                 "C++/Java Class Generator\n" +
-                "Created By: Github / Metalmario971\n" +
-                "Jan 2020\n" +
+                "Created By Github/Metalmario971\n" +
                 "\n" +
-                "Usage: Fill out the Source box, and select a language.  " +
-                "Options will appear letting you customize the source header. " +
-                " You can save this configuration for future sources with File->Save. " +
-                " Pressing Enter at any time will click the generate button (a little faster)."
+                "Usage\r\n " +
+                "Fill out the \"type files here\" box with file names you want to generate,\r\n ex: myfile.h." +
+                "  You may use paths, c:\\myfile.h, and double quotes for spaces \"c:\\my dir\\myfile.txt\".\r\n You can type multiple file paths in the box.\r\n\r\n" +
+                "Click the expander arrow below to show the configuration options. " +
+                " You can save this configuration for future sources with File->Save. Additionally checking the \"Set Current Configuration As Default\" " +
+                " menu option sets the current configuration values as the default values each time Sourcegen loads.\r\n\r\n" +
+                " Pressing Enter at any time will generate the files, or you can select 'Generate' from the 'File' menu."
                 ;
         }
 
