@@ -66,7 +66,6 @@ void printHeaderInfo()
 {
     std::cout << "|*****************************************************************************" << std::endl;
     std::cout << "| Bro C++/Java Class Generator v" << ___VERSION << "  " << std::endl;
-    std::cout << "|   by Derek Page - dpage@fulminationinteractive.com                          " << std::endl;
     std::cout << "|   Modified " << ___REVIS_DATE << "                         " << std::endl;
     std::cout << "|   Instructions: " << std::endl;
     std::cout << "|      Type your filenames separated by spaces. " << std::endl;
@@ -570,7 +569,7 @@ std::string    getHeader(std::string fileName, std::string strAddExt)
     head += "*\n";
     head += "*    @file " + strModifiedFileName + "\n";
     head += "*    @date " + getCurrentDateCompact() + "\n"; // dateGetMonthName(date) + " " + dateGetDayStr(date) + ", " + dateGetYearStr(date) + "\n";
-    head += "*    @author Derek Page\n";
+    head += "*    @author MetalMario\n";
     head += "*\n";
     head += "*    © ";
     head += dateGetYearStr(date);
@@ -643,7 +642,7 @@ std::string    getJava(std::string fileName)
     head += "/**\n";
     head += "*  @file " + fileName + "\n";
     head += "*  @date " + getCurrentDateCompact() + "\n";
-    head += "*  @author Derek Page\n";
+    head += "*  @author MetalMario\n";
     /*
         std::string Copyright=
         "*\tTHIS SOURCE CODE IS NOT FREE SOFTWARE. THE CODE HEREIN WEATHER IN \
