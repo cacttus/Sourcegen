@@ -161,7 +161,7 @@ namespace sourcegen
                 }
             });
 
-            this.Title = Globals.GetTitle() + " v" + Globals.GetVersion();
+            Title = Globals.GetTitle() + " v" + Globals.GetVersion();
 
             AllowUserToMoveWindowByDragging();
 
@@ -724,7 +724,7 @@ namespace sourcegen
         {
             string head = "";
             head += "#pragma once\n";
-            string guard = "__" + GetFileName().ToUpper() + "_" + RandomDigits() + "_H__";
+            string guard = "__" + GetFileName().ToUpper().Replace(".","_").Replace("-", "_").Replace(" ", "_") + "_" + RandomDigits() + "_H__";
             head += "#ifndef " + guard + "\n";
             head += "#define " + guard + "\n";
             head += "\n";
