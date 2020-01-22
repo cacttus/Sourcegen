@@ -10,7 +10,7 @@
         <Grid.ColumnDefinitions>
             <ColumnDefinition/>
         </Grid.ColumnDefinitions>
-        <TextBox x:Name="_textBox" Margin="10,10,10,34" TextWrapping="Wrap"/>
+        <TextBox AcceptsReturn="True" VerticalScrollBarVisibility="Visible" x:Name="_textBox" Margin="10,10,10,34" TextWrapping="Wrap"/>
         <Button x:Name="_btnOk" Content="Ok" HorizontalAlignment="Right" VerticalAlignment="Bottom" Width="75" Margin="0,0,218,9" Click="_btnOk_Click"/>
         <Button x:Name="_btnCancel" Content="Cancel" HorizontalAlignment="Right" Width="75" Margin="0,0,138,9" Height="20" VerticalAlignment="Bottom" Click="_btnCancel_Click"/>
         <Label Content="*Note: $ is replaced with spaces or tabs during file generation." HorizontalAlignment="Left" Margin="10,0,0,-22" Height="26" VerticalAlignment="Bottom"/>

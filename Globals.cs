@@ -46,14 +46,18 @@ namespace sourcegen
             displayableVersion = displayableVersion.Substring(0,displayableVersion.LastIndexOf('.'));
             return displayableVersion;
         }
-        public static void Log(string x)
+        public static void Log(string x, bool setStatus = true)
         {
-            _log += (x + Environment.NewLine);
+            string dt = DateTime.Now.ToString("HH:mm:ss:fff ");
+            _log += (dt + x + Environment.NewLine);
             if (About != null)
             {
                 About.SetLog(_log);
             }
-            MainWindow.SetStatus(x);
+            if (setStatus)
+            {
+                MainWindow.SetStatus(x);
+            }
         }
         public static string TimeSpanToString(TimeSpan t)
         {

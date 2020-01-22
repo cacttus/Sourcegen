@@ -140,7 +140,9 @@ namespace sourcegen
         private string c_strHelperText = "Type Files Here";
         private bool _bMouseDown = false;
         private System.Drawing.Point? _vLastMouse = null;
-
+        private bool _bWindowLoaded = false;
+        private bool _bDialogVisible = false;
+        
         public MainWindow()
         {
             InitializeComponent();
@@ -149,13 +151,21 @@ namespace sourcegen
             Globals.About = new About();
 
             _hook = new KeyboardHook();
-            _hook.KeyDown += new KeyboardHook.HookEventHandler((object sender, HookEventArgs e)=> {
+            _hook.KeyDown += new KeyboardHook.HookEventHandler((object sender, HookEventArgs e) =>
+            {
                 UInt32 key = e.key;
                 if (key == 13)//enter
                 {
-                    Generate();
+                    if (this.IsActive)
+                    {
+                        Generate();
+                        if (_chkCloseAfterGenerate.IsChecked == true)
+                        {
+                            Close();
+                        }
+                    }
                 }
-                else if(key == 27)//esc
+                else if (key == 27)//esc
                 {
                     Close();
                 }
@@ -170,11 +180,12 @@ namespace sourcegen
         #region Public: Methods
         public void SetStatus(string x)
         {
+            Globals.Log(x, false);
             _lblStatus.Content = x;
         }
         #endregion
 
-        #region UI Callbacks
+        #region Private: UI Callbacks
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
             NewConfig();
@@ -182,18 +193,33 @@ namespace sourcegen
             SetFilenameTextboxIndicator();
 
             Keyboard.Focus(_txtFilename);
+            _bWindowLoaded = true;
+
+            ClearDirty();//must be called after load
         }
-        private void About_MenuItem_Click(object sender, RoutedEventArgs e)
-        {
-            Globals.About.Show();
-        }
+
+        private string _txtSpacesPrevValue = "2";
         private void _txtSpaces_PreviewTextInput(object sender, TextCompositionEventArgs e)
         {
-            e.Handled = !new Regex("[^0-9.-]+").IsMatch(e.Text);
+            bool rh = new Regex("[^0-9.-]+").IsMatch(e.Text);
+
+            if(sender is TextBox)
+            {
+                _txtSpacesPrevValue = (sender as TextBox).Text;
+            }
+            e.Handled = rh;
+        }
+        private void _txtSpaces_LostFocus(object sender, RoutedEventArgs e)
+        {
+            if (_txtSpaces.Text.Length == 0)
+            {
+                _txtSpaces.Text = _txtSpacesPrevValue;
+            }
         }
         private void _btnDefaultLicense_Click(object sender, RoutedEventArgs e)
         {
             _txtLicense.Text = GetBSDLicense();
+            MarkDirty();
         }
         private void _txtFilename_PreviewKeyDown(object sender, KeyEventArgs e)
         {
@@ -209,6 +235,7 @@ namespace sourcegen
                     ClearFilenameTextboxIndicator();
                 }
             }
+            MarkDirty();
         }
         private void _txtFilename_TextChanged(object sender, TextChangedEventArgs e)
         {
@@ -216,6 +243,7 @@ namespace sourcegen
             {
                 UpdateFilenamePreview();
             }
+            MarkDirty();
         }
         private void _Configure_Shake(object sender, RoutedEventArgs e)
         {
@@ -237,6 +265,7 @@ namespace sourcegen
             _txtBaseClass.Text = "GameMemory";
 
             _txtSpaces.Text = "2";
+            MarkDirty();
         }
         private void _Configure_MonogameToolkit(object sender, RoutedEventArgs e)
         {
@@ -258,31 +287,35 @@ namespace sourcegen
             _txtBaseClass.Text = "";
 
             _txtSpaces.Text = "2";
+            MarkDirty();
         }
         private void _chkLicense_Checked(object sender, RoutedEventArgs e)
         {
             DisableHide(_txtLicense, _chkLicense);
+            MarkDirty();
         }
         private void _chkAuthor_Checked(object sender, RoutedEventArgs e)
         {
             DisableHide(_txtAuthor, _chkAuthor);
+            MarkDirty();
         }
         private void _chkCopyright_Checked(object sender, RoutedEventArgs e)
         {
             DisableHide(_txtCopyright, _chkCopyright);
+            MarkDirty();
         }
         private void _chkNamespace_Checked(object sender, RoutedEventArgs e)
         {
             DisableHide(_txtNamespace, _chkNamespace);
+            MarkDirty();
         }
         private void _chkBaseClass_Copy_Checked(object sender, RoutedEventArgs e)
         {
             DisableHide(_txtBaseClass, _chkBaseClass);
+            MarkDirty();
+
         }
-        private void MenuItem_Click(object sender, RoutedEventArgs e)
-        {
-            Application.Current.Shutdown();
-        }
+
         private void _grpOptions_Expanded(object sender, RoutedEventArgs e)
         {
             UpdateFormHeight();
@@ -292,27 +325,19 @@ namespace sourcegen
             //Wasn't exiting..
             System.Windows.Application.Current.Shutdown();
         }
-        private void _New_Click(object sender, RoutedEventArgs e)
-        {
-            NewConfig();
-        }
-        private void _Save_Click(object sender, RoutedEventArgs e)
-        {
-            SaveConfig();
-        }
-        private void _Load_Click(object sender, RoutedEventArgs e)
-        {
-            LoadConfig();
-        }
+
         private void _btnEditLicense_Click(object sender, RoutedEventArgs e)
         {
+            _bDialogVisible = true;
             TextEditor te = new TextEditor();
             te.Control = _txtLicense;
             te.ShowDialog();
+            _bDialogVisible = false;
+            MarkDirty();
         }
         private void _chkUseTabs_Checked(object sender, RoutedEventArgs e)
         {
-            _txtSpaces.IsEnabled = (_chkUseTabs.IsChecked == true);
+            MarkDirty();
         }
         private void _chkGenerateDoc_Checked(object sender, RoutedEventArgs e)
         {
@@ -321,6 +346,7 @@ namespace sourcegen
             _chkCopyright.IsChecked = _chkCopyright.IsEnabled = b;
             _chkLicense.IsChecked = _chkLicense.IsEnabled = b;
             _chkDateTime.IsChecked = _chkDateTime.IsEnabled = b;
+            MarkDirty();
         }
         private void _chkPromptToSave_Checked(object sender, RoutedEventArgs e)
         {
@@ -343,6 +369,7 @@ namespace sourcegen
                 _chkPromptOverwrite.Visibility = ToggleVisibility(noPrompt && (_chkAutoOverwrite.IsChecked == false));
             }
             UpdateFilenamePreview();
+            MarkDirty();
         }
         private void _chkDefaultSettings_Click(object sender, RoutedEventArgs e)
         {
@@ -359,6 +386,7 @@ namespace sourcegen
         {
             try
             {
+                _bDialogVisible = true;
                 var dialog = new Ookii.Dialogs.Wpf.VistaFolderBrowserDialog();
                 if (dialog.ShowDialog(this).GetValueOrDefault())
                 {
@@ -369,10 +397,16 @@ namespace sourcegen
             {
                 Globals.LogError(ex.ToString());
             }
+            finally
+            {
+                _bDialogVisible = false;
+            }
+            MarkDirty();
         }
         private void _txtDefaultDirectory_TextChanged(object sender, TextChangedEventArgs e)
         {
             UpdateFilenamePreview();
+            MarkDirty();
         }
         private void _txtFilename_PreviewMouseDown(object sender, MouseButtonEventArgs e)
         {
@@ -385,14 +419,55 @@ namespace sourcegen
         private void _chkAutoOverwrite_Checked(object sender, RoutedEventArgs e)
         {
             _chkPromptOverwrite.Visibility = ToggleVisibility(_chkAutoOverwrite.IsChecked == false);
+            MarkDirty();
         }
-        private void _Generate_Click(object sender, RoutedEventArgs e)
+        #endregion
+
+        #region Private: UI Menu callbacks
+        private void _mnuAbout_MenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            Globals.About.Show();
+        }
+        private void _mnuExit_Click(object sender, RoutedEventArgs e)
+        {
+            Application.Current.Shutdown();
+        }
+        private void _mnuNew_Click(object sender, RoutedEventArgs e)
+        {
+            NewConfig();
+        }
+        private void _mnuSave_Click(object sender, RoutedEventArgs e)
+        {
+            SaveConfig();
+        }
+        private void _mnuLoad_Click(object sender, RoutedEventArgs e)
+        {
+            LoadConfig();
+        }
+        private void _mnuGenerate_Click(object sender, RoutedEventArgs e)
         {
             Generate();
+            //Do not close.
         }
         #endregion
 
         #region Private:Methods
+        private void MarkDirty()
+        {
+            if (_bWindowLoaded)//Prevents setting things while the controls are being set.
+            {
+                _chkDefaultSettings.IsChecked = false;
+                _mnuFile.Header = "File*";
+            }
+        }
+        private void ClearDirty()
+        {
+            if (_bWindowLoaded)//Prevents setting things while the controls are being set.
+            {
+                _chkDefaultSettings.IsChecked = true;
+                _mnuFile.Header = "File";
+            }
+        }
         private void AllowUserToMoveWindowByDragging()
         {
             //Lots of low level windows BS
@@ -441,13 +516,13 @@ namespace sourcegen
                 if (System.IO.File.Exists(st))
                 {
                     LoadConfigFromFile(st);
-                    _chkDefaultSettings.IsChecked = true;
+                    ClearDirty();
                 }
             }
             catch (Exception ex)
             {
                 Globals.LogError(ex.ToString());
-                _chkDefaultSettings.IsChecked = false;
+                MarkDirty();
             }
         }
         private void SetDefaultSettings()
@@ -500,6 +575,7 @@ namespace sourcegen
         {
             try
             {
+                _bDialogVisible = true;
                 string name = "config.json";
                 string ext = System.IO.Path.GetExtension(name);
                 Microsoft.Win32.SaveFileDialog dlg = new Microsoft.Win32.SaveFileDialog();
@@ -518,6 +594,10 @@ namespace sourcegen
             catch (Exception ex)
             {
                 Globals.LogError("Exception Saving: " + ex.ToString());
+            }
+            finally
+            {
+                _bDialogVisible = false;
             }
         }
         private void SaveConfigToFile(string fullPath)
@@ -555,6 +635,8 @@ namespace sourcegen
         {
             try
             {
+                _bDialogVisible = true;
+
                 string name = "config.json";
                 string ext = System.IO.Path.GetExtension(name);
                 Microsoft.Win32.OpenFileDialog dlg = new Microsoft.Win32.OpenFileDialog();
@@ -572,6 +654,10 @@ namespace sourcegen
             catch (Exception ex)
             {
                 Globals.LogError("Exception Loading: " + ex.ToString());
+            }
+            finally
+            {
+                _bDialogVisible = false;
             }
         }
         private void LoadConfigFromFile(string file)
@@ -724,7 +810,7 @@ namespace sourcegen
         {
             string head = "";
             head += "#pragma once\n";
-            string guard = "__" + GetFileName().ToUpper().Replace(".","_").Replace("-", "_").Replace(" ", "_") + "_" + RandomDigits() + "_H__";
+            string guard = "__" + GetFileName().ToUpper().Replace(".", "_").Replace("-", "_").Replace(" ", "_") + "_" + RandomDigits() + "_H__";
             head += "#ifndef " + guard + "\n";
             head += "#define " + guard + "\n";
             head += "\n";
@@ -935,11 +1021,6 @@ namespace sourcegen
             }
 
             _lstGeneratedFiles.Clear();
-
-            if (_chkCloseAfterGenerate.IsChecked == true)
-            {
-                Close();
-            }
         }
         private void OpenGeneratedFileFolders()
         {
@@ -979,6 +1060,7 @@ namespace sourcegen
         {
             try
             {
+                _bDialogVisible = true; 
                 bool continueSave = false;
                 string selected_fname = "";
                 if (_chkPromptToSave.IsChecked == true)
@@ -1067,6 +1149,10 @@ namespace sourcegen
             catch (Exception ex)
             {
                 Globals.LogError("Error writing file: " + ex.ToString());
+            }
+            finally
+            {
+                _bDialogVisible = false;
             }
         }
         private void DisableHide(TextBox tb, CheckBox ch)
@@ -1177,6 +1263,7 @@ namespace sourcegen
             }
         }
         #endregion
+
 
     }
 }
