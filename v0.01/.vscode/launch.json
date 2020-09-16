@@ -1,0 +1,30 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "(gdb) Launch",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/bin/sgen",,
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "sourceFileMap": { 
+        "/build/glibc-YYA7BZ": "C:/Users/nguye/AppData/Local/Packages/CanonicalGroupLimited.UbuntuonWindows_79rhkp1fndgsc/LocalState/rootfs/usr/src/glibc" 
+      },
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true,
+        },
+        {
+          "description": "Skip <path> files",
+          "text": "-interpreter-exec console \"skip -gfi /build/glibc-YYA7BZ/glibc-2.31/*.c\""
+        }
+      ]
+    },
+  ]
+}
